@@ -20,3 +20,9 @@ class Amenity(db.Model):
         secondary=property_amenities,
         back_populates="amenities"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+        }

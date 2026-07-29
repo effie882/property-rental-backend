@@ -34,6 +34,8 @@ def register():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request must be JSON"}), 415
     if not data.get("email") or not data.get("password"):
         return jsonify({"error": "Email and password are required"}), 400
 
@@ -48,3 +50,31 @@ def login():
         "refresh_token": refresh_token,
         "user": user.to_dict(private=True),
     }), 200
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json()
+    if not data or not data.get("email"):
+        return jsonify({"error": "Email is required"}), 400
+
+    user = User.query.filter_by(email=data["email"].lower()).first()
+    if user is None:
+        return jsonify({"error": "If that email exists, a reset link has been sent"}), 200
+
+    return jsonify({"message": "If that email exists, a reset link has been sent"}), 200
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json()
+    if not data or not data.get("email") or not data.get("token") or not data.get("new_password"):
+        return jsonify({"error": "Email, token, and new_password are required"}), 400
+
+    user = User.query.filter_by(email=data["email"].lower()).first()
+    if user is None:
+        return jsonify({"error": "Invalid token or email"}), 400
+
+    user.password_hash = bcrypt.generate_password_hash(data["new_password"]).decode("utf-8")
+    db.session.commit()
+    return jsonify({"message": "Password has been reset"}), 200

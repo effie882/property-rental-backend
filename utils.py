@@ -19,6 +19,18 @@ def host_required(fn):
     return wrapper
 
 
+def landlord_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        user_id = get_jwt_identity()
+        user = db.session.get(User, user_id)
+        if user is None or user.role != "landlord":
+            return jsonify({"error": "Landlord access required"}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -29,6 +41,10 @@ def admin_required(fn):
             return jsonify({"error": "Admin access required"}), 403
         return fn(*args, **kwargs)
     return wrapper
+
+
+def validation_error_response(err):
+    return jsonify({"errors": err.messages}), 422
 
 
 def calculate_total(price_per_night, check_in, check_out):

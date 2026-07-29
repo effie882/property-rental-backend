@@ -64,3 +64,19 @@ class Booking(db.Model):
         back_populates="booking",
         uselist=False
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "property_id": self.property_id,
+            "property_title": self.property.title if self.property else None,
+            "property_city": self.property.city if self.property else None,
+            "tenant_id": self.tenant_id,
+            "tenant_name": f"{self.tenant.first_name} {self.tenant.last_name}" if self.tenant else None,
+            "check_in": self.check_in.isoformat() if self.check_in else None,
+            "check_out": self.check_out.isoformat() if self.check_out else None,
+            "total_amount": float(self.total_amount) if self.total_amount is not None else None,
+            "booking_status": self.booking_status,
+            "has_payment": self.payment is not None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

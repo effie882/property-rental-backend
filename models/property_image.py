@@ -24,3 +24,10 @@ class PropertyImage(db.Model):
         "Property",
         back_populates="images"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "property_id": self.property_id,
+            "image_url": self.image_url,
+        }

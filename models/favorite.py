@@ -39,3 +39,15 @@ class Favorite(db.Model):
         "Property",
         back_populates="favorites"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "property_id": self.property_id,
+            "property_title": self.property.title if self.property else None,
+            "property_city": self.property.city if self.property else None,
+            "property_price": float(self.property.price) if self.property and self.property.price is not None else None,
+            "image_url": self.property.image_url if self.property else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

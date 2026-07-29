@@ -1,140 +1,123 @@
-from flask import Blueprint, request, jsonify
+from flask import request
+from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from extensions import db
-from models import Property, User, Amenity
-from utils import host_required
+from marshmallow import ValidationError
 
-property_bp = Blueprint("properties", __name__)
-
-
-@property_bp.route("/", methods=["GET"])
-def get_properties():
-    query = Property.query
-    status = request.args.get("status")
-    property_type = request.args.get("property_type")
-    city = request.args.get("city")
-    min_price = request.args.get("min_price", type=float)
-    max_price = request.args.get("max_price", type=float)
-    bedrooms = request.args.get("bedrooms", type=int)
-    bathrooms = request.args.get("bathrooms", type=int)
-
-    if status:
-        query = query.filter(Property.status == status)
-    if property_type:
-        query = query.filter(Property.property_type == property_type)
-    if city:
-        query = query.filter(Property.city.ilike(f"%{city}%"))
-    if min_price is not None:
-        query = query.filter(Property.price >= min_price)
-    if max_price is not None:
-        query = query.filter(Property.price <= max_price)
-    if bedrooms is not None:
-        query = query.filter(Property.bedrooms == bedrooms)
-    if bathrooms is not None:
-        query = query.filter(Property.bathrooms == bathrooms)
-
-    properties = query.order_by(Property.created_at.desc()).all()
-    return jsonify([p.to_dict() for p in properties]), 200
+from app import db
+from models import Property, Amenity, User
+from schemas.property import property_schema, properties_schema
+from utils import landlord_required, validation_error_response
 
 
-@property_bp.route("/<int:id>", methods=["GET"])
-def get_property(id):
-    prop = db.session.get(Property, id)
-    if prop is None:
-        return jsonify({"error": "Property not found"}), 404
-    return jsonify(prop.to_dict()), 200
+class PropertyListResource(Resource):
+    """GET /api/properties  |  POST /api/properties"""
+
+    def get(self):
+        query = Property.query
+
+        city          = request.args.get("city")
+        county        = request.args.get("county")
+        property_type = request.args.get("property_type")
+        min_price     = request.args.get("min_price", type=float)
+        max_price     = request.args.get("max_price", type=float)
+        bedrooms      = request.args.get("bedrooms",  type=int)
+        status        = request.args.get("status",    default="available")
+
+        if city:          query = query.filter(Property.city.ilike(f"%{city}%"))
+        if county:        query = query.filter(Property.county.ilike(f"%{county}%"))
+        if property_type: query = query.filter(Property.property_type == property_type)
+        if min_price:     query = query.filter(Property.price >= min_price)
+        if max_price:     query = query.filter(Property.price <= max_price)
+        if bedrooms:      query = query.filter(Property.bedrooms >= bedrooms)
+        if status:        query = query.filter(Property.status == status)
+
+        properties = query.order_by(Property.created_at.desc()).all()
+        return properties_schema.dump(properties), 200
+
+    @jwt_required()
+    @landlord_required
+    def post(self):
+        user_id = get_jwt_identity()
+        try:
+            data = property_schema.load(request.get_json())
+        except ValidationError as err:
+            return validation_error_response(err)
+
+        prop = Property(
+            landlord_id   = user_id,
+            title         = data["title"].strip(),
+            description   = data.get("description"),
+            address       = data.get("address"),
+            city          = data.get("city"),
+            county        = data.get("county"),
+            property_type = data.get("property_type"),
+            bedrooms      = data.get("bedrooms", 1),
+            bathrooms     = data.get("bathrooms", 1),
+            price         = data["price"],
+            status        = data.get("status", "available"),
+            image_url     = data.get("image_url"),
+        )
+        if data.get("amenity_ids"):
+            prop.amenities = Amenity.query.filter(Amenity.id.in_(data["amenity_ids"])).all()
+
+        db.session.add(prop)
+        db.session.commit()
+        return {"message": "Property created", "property": property_schema.dump(prop)}, 201
 
 
-@property_bp.route("/", methods=["POST"])
-@jwt_required()
-@host_required
-def create_property():
-    user_id = get_jwt_identity()
-    data = request.get_json()
-    required = ["title", "price"]
-    missing = [f for f in required if not data.get(f)]
-    if missing:
-        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+class PropertyResource(Resource):
+    """GET /api/properties/<id>  |  PUT /api/properties/<id>  |  DELETE /api/properties/<id>"""
 
-    prop = Property(
-        landlord_id=user_id,
-        title=data["title"].strip(),
-        description=data.get("description"),
-        address=data.get("address"),
-        city=data.get("city"),
-        county=data.get("county"),
-        property_type=data.get("property_type"),
-        bedrooms=data.get("bedrooms"),
-        bathrooms=data.get("bathrooms"),
-        price=data["price"],
-        status=data.get("status", "available"),
-        image_url=data.get("image_url"),
-    )
+    def get(self, id):
+        prop = Property.query.get_or_404(id)
+        return property_schema.dump(prop), 200
 
-    amenity_ids = data.get("amenity_ids", [])
-    if amenity_ids:
-        amenities = Amenity.query.filter(Amenity.id.in_(amenity_ids)).all()
-        prop.amenities = amenities
+    @jwt_required()
+    @landlord_required
+    def put(self, id):
+        prop    = Property.query.get_or_404(id)
+        user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        if prop.landlord_id != user_id and user.role != "admin":
+            return {"error": "You do not own this property"}, 403
 
-    db.session.add(prop)
-    db.session.commit()
-    return jsonify({"message": "Property created", "property": prop.to_dict()}), 201
+        try:
+            data = property_schema.load(request.get_json(), partial=True)
+        except ValidationError as err:
+            return validation_error_response(err)
 
+        fields = ["title", "description", "address", "city", "county",
+                  "property_type", "bedrooms", "bathrooms", "price", "status", "image_url"]
+        for field in fields:
+            if field in data:
+                setattr(prop, field, data[field])
+        if "amenity_ids" in data:
+            prop.amenities = Amenity.query.filter(Amenity.id.in_(data["amenity_ids"])).all()
 
-@property_bp.route("/<int:id>", methods=["PUT"])
-@jwt_required()
-@host_required
-def update_property(id):
-    prop = db.session.get(Property, id)
-    if prop is None:
-        return jsonify({"error": "Property not found"}), 404
+        db.session.commit()
+        return {"message": "Property updated", "property": property_schema.dump(prop)}, 200
 
-    user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
-    if prop.landlord_id != user_id and user.role != "admin":
-        return jsonify({"error": "You do not own this property"}), 403
-
-    data = request.get_json()
-    fields = [
-        "title", "description", "address", "city", "county",
-        "property_type", "bedrooms", "bathrooms", "price",
-        "status", "image_url"
-    ]
-    for field in fields:
-        if field in data:
-            setattr(prop, field, data[field])
-
-    if "amenity_ids" in data:
-        amenity_ids = data["amenity_ids"]
-        amenities = Amenity.query.filter(Amenity.id.in_(amenity_ids)).all()
-        prop.amenities = amenities
-
-    db.session.commit()
-    return jsonify({"message": "Property updated", "property": prop.to_dict()}), 200
+    @jwt_required()
+    @landlord_required
+    def delete(self, id):
+        prop    = Property.query.get_or_404(id)
+        user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        if prop.landlord_id != user_id and user.role != "admin":
+            return {"error": "You do not own this property"}, 403
+        db.session.delete(prop)
+        db.session.commit()
+        return {"message": "Property deleted"}, 200
 
 
-@property_bp.route("/<int:id>", methods=["DELETE"])
-@jwt_required()
-@host_required
-def delete_property(id):
-    prop = db.session.get(Property, id)
-    if prop is None:
-        return jsonify({"error": "Property not found"}), 404
+class LandlordPropertiesResource(Resource):
+    """GET /api/properties/mine"""
 
-    user_id = get_jwt_identity()
-    user = db.session.get(User, user_id)
-    if prop.landlord_id != user_id and user.role != "admin":
-        return jsonify({"error": "You do not own this property"}), 403
-
-    db.session.delete(prop)
-    db.session.commit()
-    return jsonify({"message": "Property deleted"}), 200
-
-
-@property_bp.route("/host/mine", methods=["GET"])
-@jwt_required()
-@host_required
-def get_my_properties():
-    user_id = get_jwt_identity()
-    properties = Property.query.filter_by(landlord_id=user_id).order_by(Property.created_at.desc()).all()
-    return jsonify([p.to_dict() for p in properties]), 200
+    @jwt_required()
+    @landlord_required
+    def get(self):
+        user_id = get_jwt_identity()
+        user    = User.query.get(user_id)
+        # NOTE: user.properties is a plain list (relationship has no lazy="dynamic")
+        properties = sorted(user.properties, key=lambda p: p.created_at or 0, reverse=True)
+        return properties_schema.dump(properties), 200

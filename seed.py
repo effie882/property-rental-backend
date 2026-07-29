@@ -1,296 +1,247 @@
-from datetime import date, datetime
-from app import app, db, bcrypt
-from models import User, Property, Booking, Payment, Review, Amenity, Favorite, MaintenanceRequest, PropertyImage
+from app import app, bcrypt
+from models import (
+    db,
+    User,
+    Property,
+    Booking,
+    Payment,
+    Review,
+    Favorite,
+    MaintenanceRequest,
+    PropertyImage,
+    Amenity,
+    PropertyAmenity
+)
+
+from datetime import date
 
 
-def seed_roles():
-    roles = ["landlord", "tenant", "admin"]
-    for role in roles:
-        if not User.query.filter_by(role=role).first():
-            user = User(
-                first_name=role.capitalize(),
-                last_name="User",
-                email=f"{role}@rental.com",
-                password_hash=bcrypt.generate_password_hash("password").decode("utf-8"),
-                role=role,
-                phone="+1234567890",
-            )
-            db.session.add(user)
+with app.app_context():
+
+    print("Deleting old data...")
+
+    PropertyAmenity.query.delete()
+    PropertyImage.query.delete()
+    MaintenanceRequest.query.delete()
+    Favorite.query.delete()
+    Review.query.delete()
+    Payment.query.delete()
+    Booking.query.delete()
+    Property.query.delete()
+    Amenity.query.delete()
+    User.query.delete()
     db.session.commit()
 
+    def hash_pw(raw):
+        return bcrypt.generate_password_hash(raw).decode("utf-8")
 
-def seed_admin():
-    if not User.query.filter_by(email="admin@rental.com").first():
-        admin = User(
-            first_name="Admin",
-            last_name="User",
-            email="admin@rental.com",
-            password_hash=bcrypt.generate_password_hash("admin123").decode("utf-8"),
-            role="admin",
-            phone="+1234567890",
-        )
-        db.session.add(admin)
-        db.session.commit()
+    # =========================================================================
+    # USERS — 2 landlords, 3 tenants, 1 admin
+    # =========================================================================
+    print("Seeding users...")
 
+    john = User(first_name="John", last_name="Kamau", email="john@example.com",
+                password_hash=hash_pw("password123"), phone="0712345678", role="landlord")
+    jane = User(first_name="Jane", last_name="Wanjiku", email="jane@example.com",
+                password_hash=hash_pw("password123"), phone="0712000002", role="landlord")
+    mary = User(first_name="Mary", last_name="Achieng", email="mary@example.com",
+                password_hash=hash_pw("password123"), phone="0798765432", role="tenant")
+    brian = User(first_name="Brian", last_name="Mwangi", email="brian@example.com",
+                 password_hash=hash_pw("password123"), phone="0798000002", role="tenant")
+    alex = User(first_name="Alex", last_name="Otieno", email="alex@example.com",
+                password_hash=hash_pw("password123"), phone="0798000003", role="tenant")
+    admin = User(first_name="Admin", last_name="User", email="admin@example.com",
+                 password_hash=hash_pw("password123"), phone="0700000000", role="admin")
 
-def seed_amenities():
-    amenities = [
-        "WiFi", "Pool", "Parking", "Gym", "Air Conditioning",
-        "Kitchen", "Washer", "Dryer", "TV", "Pet Friendly"
-    ]
-    for name in amenities:
-        if not Amenity.query.filter_by(name=name).first():
-            amenity = Amenity(name=name)
-            db.session.add(amenity)
+    db.session.add_all([john, jane, mary, brian, alex, admin])
     db.session.commit()
 
+    # =========================================================================
+    # AMENITIES — created once, reused across properties
+    # =========================================================================
+    print("Seeding amenities...")
 
-def seed_properties():
-    landlord = User.query.filter_by(role="landlord").first()
-    if not landlord:
-        return
-    if Property.query.filter_by(title="Sunny Apartment").first():
-        return
+    wifi        = Amenity(name="WiFi")
+    parking     = Amenity(name="Parking")
+    pool        = Amenity(name="Pool")
+    kitchen     = Amenity(name="Kitchen")
+    ac          = Amenity(name="Air Conditioning")
+    security    = Amenity(name="Security")
+    generator   = Amenity(name="Generator")
 
-    amenities = {name: Amenity.query.filter_by(name=name).first() for name in [
-        "WiFi", "Pool", "Parking", "Gym", "Air Conditioning", "Kitchen"
-    ]}
-
-    properties_data = [
-        {
-            "landlord_id": landlord.id,
-            "title": "Sunny Apartment",
-            "description": "A bright and spacious apartment in the city center.",
-            "address": "123 Main St",
-            "city": "Nairobi",
-            "county": "Nairobi",
-            "property_type": "Apartment",
-            "bedrooms": 2,
-            "bathrooms": 1,
-            "price": 800.00,
-            "status": "available",
-            "image_url": "https://example.com/sunny-apartment.jpg",
-            "amenity_names": ["WiFi", "Pool", "Parking"],
-        },
-        {
-            "landlord_id": landlord.id,
-            "title": "Cozy Studio",
-            "description": "A comfortable studio close to the university.",
-            "address": "456 University Ave",
-            "city": "Nairobi",
-            "county": "Nairobi",
-            "property_type": "Studio",
-            "bedrooms": 1,
-            "bathrooms": 1,
-            "price": 450.00,
-            "status": "available",
-            "image_url": "https://example.com/cozy-studio.jpg",
-            "amenity_names": ["WiFi", "Kitchen", "TV"],
-        },
-        {
-            "landlord_id": landlord.id,
-            "title": "Luxury Villa",
-            "description": "A premium villa with pool and garden.",
-            "address": "789 Hillside Dr",
-            "city": "Nairobi",
-            "county": "Nairobi",
-            "property_type": "Villa",
-            "bedrooms": 4,
-            "bathrooms": 3,
-            "price": 2500.00,
-            "status": "available",
-            "image_url": "https://example.com/luxury-villa.jpg",
-            "amenity_names": ["WiFi", "Pool", "Parking", "Gym", "Air Conditioning", "Kitchen", "Washer", "Dryer", "TV", "Pet Friendly"],
-        },
-    ]
-
-    for pdata in properties_data:
-        amenity_names = pdata.pop("amenity_names")
-        prop = Property(**pdata)
-        db.session.add(prop)
-        db.session.flush()
-        for name in amenity_names:
-            amenity = amenities.get(name)
-            if amenity:
-                prop.amenities.append(amenity)
-
+    db.session.add_all([wifi, parking, pool, kitchen, ac, security, generator])
     db.session.commit()
 
+    # =========================================================================
+    # PROPERTIES — 4 properties across 2 landlords
+    # =========================================================================
+    print("Seeding properties...")
 
-def seed_bookings():
-    tenant = User.query.filter_by(role="tenant").first()
-    landlord = User.query.filter_by(role="landlord").first()
-    if not tenant or not landlord:
-        return
+    p1 = Property(landlord_id=john.id, title="Modern Apartment",
+                   description="Beautiful 2-bedroom apartment.",
+                   address="Ngong Road", city="Nairobi", county="Nairobi",
+                   property_type="Apartment", bedrooms=2, bathrooms=2, price=3500,
+                   status="available", image_url="https://example.com/apartment.jpg")
 
-    if Booking.query.first():
-        return
+    p2 = Property(landlord_id=john.id, title="City Studio",
+                   description="Compact studio close to the CBD.",
+                   address="Kimathi Street", city="Nairobi", county="Nairobi",
+                   property_type="Studio", bedrooms=1, bathrooms=1, price=2200,
+                   status="available", image_url="https://example.com/studio.jpg")
 
-    prop1 = Property.query.filter_by(title="Sunny Apartment").first()
-    prop2 = Property.query.filter_by(title="Cozy Studio").first()
-    if not prop1 or not prop2:
-        return
+    p3 = Property(landlord_id=jane.id, title="Ocean View Villa",
+                   description="Spacious villa with sea views.",
+                   address="Nyali Road", city="Mombasa", county="Mombasa",
+                   property_type="Villa", bedrooms=4, bathrooms=3, price=9500,
+                   status="available", image_url="https://example.com/villa.jpg")
 
-    bookings_data = [
-        {
-            "property_id": prop1.id,
-            "tenant_id": tenant.id,
-            "check_in": date(2026, 8, 1),
-            "check_out": date(2026, 8, 7),
-            "total_amount": 4800.00,
-            "booking_status": "confirmed",
-        },
-        {
-            "property_id": prop2.id,
-            "tenant_id": tenant.id,
-            "check_in": date(2026, 9, 15),
-            "check_out": date(2026, 9, 20),
-            "total_amount": 2250.00,
-            "booking_status": "pending",
-        },
-    ]
+    p4 = Property(landlord_id=jane.id, title="Lakeside Cottage",
+                   description="Cozy cottage on the lake shore.",
+                   address="Moi South Lake Road", city="Naivasha", county="Nakuru",
+                   property_type="Cottage", bedrooms=2, bathrooms=1, price=4800,
+                   status="booked", image_url="https://example.com/cottage.jpg")
 
-    for bdata in bookings_data:
-        booking = Booking(**bdata)
-        db.session.add(booking)
-
+    db.session.add_all([p1, p2, p3, p4])
     db.session.commit()
 
+    # =========================================================================
+    # PROPERTY_AMENITIES (junction) — every property gets amenities
+    # =========================================================================
+    print("Seeding property amenities...")
 
-def seed_payments():
-    if Payment.query.first():
-        return
+    db.session.add_all([
+        PropertyAmenity(property_id=p1.id, amenity_id=wifi.id),
+        PropertyAmenity(property_id=p1.id, amenity_id=parking.id),
+        PropertyAmenity(property_id=p1.id, amenity_id=kitchen.id),
 
-    bookings = Booking.query.all()
-    if not bookings:
-        return
+        PropertyAmenity(property_id=p2.id, amenity_id=wifi.id),
+        PropertyAmenity(property_id=p2.id, amenity_id=security.id),
 
-    payments_data = [
-        {
-            "booking_id": bookings[0].id,
-            "amount": 4800.00,
-            "payment_method": "credit_card",
-            "payment_status": "completed",
-            "transaction_id": "txn_001",
-            "payment_date": datetime(2026, 7, 28, 10, 0, 0),
-        },
-        {
-            "booking_id": bookings[1].id,
-            "amount": 2250.00,
-            "payment_method": "bank_transfer",
-            "payment_status": "pending",
-            "transaction_id": "txn_002",
-            "payment_date": datetime(2026, 7, 28, 11, 0, 0),
-        },
-    ]
+        PropertyAmenity(property_id=p3.id, amenity_id=wifi.id),
+        PropertyAmenity(property_id=p3.id, amenity_id=pool.id),
+        PropertyAmenity(property_id=p3.id, amenity_id=ac.id),
+        PropertyAmenity(property_id=p3.id, amenity_id=generator.id),
 
-    for pdata in payments_data:
-        payment = Payment(**pdata)
-        db.session.add(payment)
-
+        PropertyAmenity(property_id=p4.id, amenity_id=kitchen.id),
+        PropertyAmenity(property_id=p4.id, amenity_id=parking.id),
+    ])
     db.session.commit()
 
+    # =========================================================================
+    # PROPERTY_IMAGES — extra gallery shots for each property
+    # =========================================================================
+    print("Seeding property images...")
 
-def seed_reviews():
-    tenant = User.query.filter_by(role="tenant").first()
-    prop1 = Property.query.filter_by(title="Sunny Apartment").first()
-    if not tenant or not prop1:
-        return
-    if Review.query.first():
-        return
-
-    reviews_data = [
-        {
-            "property_id": prop1.id,
-            "tenant_id": tenant.id,
-            "rating": 5,
-            "comment": "Great place, very clean and spacious!",
-            "created_at": datetime(2026, 8, 8, 0, 0, 0),
-        },
-    ]
-
-    for rdata in reviews_data:
-        review = Review(**rdata)
-        db.session.add(review)
-
+    db.session.add_all([
+        PropertyImage(property_id=p1.id, image_url="https://example.com/property1-a.jpg"),
+        PropertyImage(property_id=p1.id, image_url="https://example.com/property1-b.jpg"),
+        PropertyImage(property_id=p2.id, image_url="https://example.com/property2-a.jpg"),
+        PropertyImage(property_id=p3.id, image_url="https://example.com/property3-a.jpg"),
+        PropertyImage(property_id=p3.id, image_url="https://example.com/property3-b.jpg"),
+        PropertyImage(property_id=p4.id, image_url="https://example.com/property4-a.jpg"),
+    ])
     db.session.commit()
 
+    # =========================================================================
+    # BOOKINGS — spread across tenants and properties
+    # =========================================================================
+    print("Seeding bookings...")
 
-def seed_favorites():
-    tenant = User.query.filter_by(role="tenant").first()
-    prop1 = Property.query.filter_by(title="Sunny Apartment").first()
-    prop2 = Property.query.filter_by(title="Luxury Villa").first()
-    if not tenant or not prop1 or not prop2:
-        return
-    if Favorite.query.first():
-        return
+    b1 = Booking(property_id=p1.id, tenant_id=mary.id,
+                 check_in=date(2026, 8, 1), check_out=date(2026, 8, 5),
+                 total_amount=14000, booking_status="confirmed")
 
-    fav1 = Favorite(user_id=tenant.id, property_id=prop1.id)
-    fav2 = Favorite(user_id=tenant.id, property_id=prop2.id)
-    db.session.add(fav1)
-    db.session.add(fav2)
+    b2 = Booking(property_id=p3.id, tenant_id=brian.id,
+                 check_in=date(2026, 9, 10), check_out=date(2026, 9, 15),
+                 total_amount=47500, booking_status="confirmed")
 
+    b3 = Booking(property_id=p4.id, tenant_id=alex.id,
+                 check_in=date(2026, 6, 1), check_out=date(2026, 6, 4),
+                 total_amount=14400, booking_status="completed")
+
+    b4 = Booking(property_id=p2.id, tenant_id=mary.id,
+                 check_in=date(2026, 10, 1), check_out=date(2026, 10, 3),
+                 total_amount=4400, booking_status="cancelled")
+
+    db.session.add_all([b1, b2, b3, b4])
     db.session.commit()
 
+    # =========================================================================
+    # PAYMENTS — one per confirmed/completed booking (one-to-one)
+    # =========================================================================
+    print("Seeding payments...")
 
-def seed_maintenance_requests():
-    tenant = User.query.filter_by(role="tenant").first()
-    prop1 = Property.query.filter_by(title="Sunny Apartment").first()
-    if not tenant or not prop1:
-        return
-    if MaintenanceRequest.query.first():
-        return
-
-    mr = MaintenanceRequest(
-        property_id=prop1.id,
-        tenant_id=tenant.id,
-        issue="Leaky faucet in the kitchen",
-        status="open",
-    )
-    db.session.add(mr)
-
+    db.session.add_all([
+        Payment(booking_id=b1.id, amount=14000, payment_method="M-Pesa",
+                payment_status="completed", transaction_id="TXN100001"),
+        Payment(booking_id=b2.id, amount=47500, payment_method="M-Pesa",
+                payment_status="completed", transaction_id="TXN100002"),
+        Payment(booking_id=b3.id, amount=14400, payment_method="Card",
+                payment_status="completed", transaction_id="TXN100003"),
+        # b4 was cancelled before payment, so it intentionally has none —
+        # demonstrates a booking WITHOUT a payment.
+    ])
     db.session.commit()
 
+    # =========================================================================
+    # REVIEWS — from tenants who completed stays
+    # =========================================================================
+    print("Seeding reviews...")
 
-def seed_property_images():
-    prop1 = Property.query.filter_by(title="Sunny Apartment").first()
-    prop2 = Property.query.filter_by(title="Cozy Studio").first()
-    prop3 = Property.query.filter_by(title="Luxury Villa").first()
-    if not prop1 or not prop2 or not prop3:
-        return
-    if PropertyImage.query.first():
-        return
-
-    images_data = [
-        {"property_id": prop1.id, "image_url": "https://example.com/sunny-1.jpg"},
-        {"property_id": prop1.id, "image_url": "https://example.com/sunny-2.jpg"},
-        {"property_id": prop2.id, "image_url": "https://example.com/studio-1.jpg"},
-        {"property_id": prop3.id, "image_url": "https://example.com/villa-1.jpg"},
-        {"property_id": prop3.id, "image_url": "https://example.com/villa-2.jpg"},
-    ]
-
-    for idata in images_data:
-        img = PropertyImage(**idata)
-        db.session.add(img)
-
+    db.session.add_all([
+        Review(property_id=p1.id, tenant_id=mary.id, rating=5, comment="Excellent place!"),
+        Review(property_id=p3.id, tenant_id=brian.id, rating=4, comment="Lovely villa, great views."),
+        Review(property_id=p4.id, tenant_id=alex.id, rating=5, comment="Peaceful and clean."),
+    ])
     db.session.commit()
 
+    # =========================================================================
+    # FAVORITES — tenants saving properties they like
+    # =========================================================================
+    print("Seeding favorites...")
 
-def run_seeds():
-    with app.app_context():
-        db.create_all()
-        seed_roles()
-        seed_admin()
-        seed_amenities()
-        seed_properties()
-        seed_bookings()
-        seed_payments()
-        seed_reviews()
-        seed_favorites()
-        seed_maintenance_requests()
-        seed_property_images()
-        print("Database seeded successfully.")
+    db.session.add_all([
+        Favorite(user_id=mary.id, property_id=p3.id),
+        Favorite(user_id=brian.id, property_id=p1.id),
+        Favorite(user_id=alex.id, property_id=p2.id),
+        Favorite(user_id=alex.id, property_id=p3.id),
+    ])
+    db.session.commit()
 
+    # =========================================================================
+    # MAINTENANCE REQUESTS — a mix of statuses
+    # =========================================================================
+    print("Seeding maintenance requests...")
 
-if __name__ == "__main__":
-    run_seeds()
+    db.session.add_all([
+        MaintenanceRequest(property_id=p1.id, tenant_id=mary.id,
+                           issue="Leaking kitchen sink", status="pending"),
+        MaintenanceRequest(property_id=p3.id, tenant_id=brian.id,
+                           issue="Air conditioning not cooling", status="in_progress"),
+        MaintenanceRequest(property_id=p4.id, tenant_id=alex.id,
+                           issue="Broken window latch", status="resolved"),
+    ])
+    db.session.commit()
+
+    # =========================================================================
+    # SUMMARY
+    # =========================================================================
+    print("\nDatabase seeded successfully!\n")
+    print(f"   Users:                {User.query.count()}")
+    print(f"   Properties:           {Property.query.count()}")
+    print(f"   Amenities:            {Amenity.query.count()}")
+    print(f"   Property Amenities:   {PropertyAmenity.query.count()}")
+    print(f"   Property Images:      {PropertyImage.query.count()}")
+    print(f"   Bookings:             {Booking.query.count()}")
+    print(f"   Payments:             {Payment.query.count()}")
+    print(f"   Reviews:              {Review.query.count()}")
+    print(f"   Favorites:            {Favorite.query.count()}")
+    print(f"   Maintenance Requests: {MaintenanceRequest.query.count()}")
+
+    print("\nLogin credentials (all passwords: password123):")
+    print("   Landlord -> john@example.com")
+    print("   Landlord -> jane@example.com")
+    print("   Tenant   -> mary@example.com")
+    print("   Tenant   -> brian@example.com")
+    print("   Tenant   -> alex@example.com")
+    print("   Admin    -> admin@example.com")

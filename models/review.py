@@ -1,54 +1,58 @@
+from datetime import datetime
+
 from . import db
 
 
-class Payment(db.Model):
-    __tablename__ = "payments"
+class Review(db.Model):
+    __tablename__ = "reviews"
 
     id = db.Column(
         db.Integer,
         primary_key=True
     )
 
-    booking_id = db.Column(
+    property_id = db.Column(
         db.Integer,
-        db.ForeignKey("bookings.id"),
-        nullable=False,
-        unique=True
+        db.ForeignKey("properties.id"),
+        nullable=False
     )
 
-    amount = db.Column(
-        db.Numeric(10, 2)
+    tenant_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False
     )
 
-    payment_method = db.Column(
-        db.String(50)
+    rating = db.Column(
+        db.Integer,
+        nullable=False
     )
 
-    payment_status = db.Column(
-        db.String(50)
+    comment = db.Column(
+        db.Text
     )
 
-    transaction_id = db.Column(
-        db.String(100)
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
     )
 
-    payment_date = db.Column(
-        db.DateTime
+    property = db.relationship(
+        "Property",
+        back_populates="reviews"
     )
 
-    # One payment belongs to one booking
-    booking = db.relationship(
-        "Booking",
-        back_populates="payment"
+    tenant = db.relationship(
+        "User",
+        back_populates="reviews"
     )
 
     def to_dict(self):
         return {
             "id": self.id,
-            "booking_id": self.booking_id,
-            "amount": float(self.amount) if self.amount is not None else None,
-            "payment_method": self.payment_method,
-            "payment_status": self.payment_status,
-            "transaction_id": self.transaction_id,
-            "payment_date": self.payment_date.isoformat() if self.payment_date else None,
+            "property_id": self.property_id,
+            "tenant_id": self.tenant_id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

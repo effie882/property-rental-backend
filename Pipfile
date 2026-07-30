@@ -15,6 +15,7 @@ flask-restful = "*"
 gunicorn = "*"
 flask-bcrypt = "*"
 marshmallow = "==3.26.1"
+marshmallow-sqlalchemy = "*"
 
 [dev-packages]
 

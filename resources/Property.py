@@ -1,9 +1,9 @@
-from flask import request
-from flask_restful import Resource
+from flask import Blueprint, request
+from flask_restful import Api, Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 
-from app import db
+from extensions import db
 from models import Property, Amenity, User
 from schemas.property import property_schema, properties_schema
 from utils import landlord_required, validation_error_response
@@ -121,3 +121,11 @@ class LandlordPropertiesResource(Resource):
         # NOTE: user.properties is a plain list (relationship has no lazy="dynamic")
         properties = sorted(user.properties, key=lambda p: p.created_at or 0, reverse=True)
         return properties_schema.dump(properties), 200
+
+
+property_bp = Blueprint("properties", __name__)
+api = Api(property_bp)
+
+api.add_resource(PropertyListResource, "/", endpoint="property_list")
+api.add_resource(PropertyResource, "/<int:id>", endpoint="property_detail")
+api.add_resource(LandlordPropertiesResource, "/mine", endpoint="landlord_properties")

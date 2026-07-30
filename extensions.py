@@ -4,6 +4,7 @@ from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_marshmallow import Marshmallow
 
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
@@ -20,3 +21,4 @@ bcrypt = Bcrypt()
 migrate = Migrate()
 cors = CORS()
 jwt = JWTManager()
+ma = Marshmallow()

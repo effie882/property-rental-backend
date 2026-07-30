@@ -41,6 +41,9 @@ class User(db.Model):
         nullable=False
     )
 
+    reset_token = db.Column(db.String(200))
+    reset_token_expires = db.Column(db.DateTime)
+
     created_at = db.Column(
         db.DateTime,
         default=datetime.utcnow
@@ -75,6 +78,18 @@ class User(db.Model):
         "MaintenanceRequest",
         back_populates="tenant"
     )
+
+    def to_dict(self, private=False):
+        return {
+            "id": self.id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "full_name": f"{self.first_name} {self.last_name}",
+            "email": self.email,
+            "phone": self.phone,
+            "role": self.role,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
     def __repr__(self):
         return (

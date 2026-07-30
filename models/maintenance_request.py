@@ -47,3 +47,15 @@ class MaintenanceRequest(db.Model):
         "User",
         back_populates="maintenance_requests"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "property_id": self.property_id,
+            "property_title": self.property.title if self.property else None,
+            "tenant_id": self.tenant_id,
+            "tenant_name": f"{self.tenant.first_name} {self.tenant.last_name}" if self.tenant else None,
+            "issue": self.issue,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

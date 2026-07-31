@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Force .env values to override any existing shell environment variables
+load_dotenv(override=True)
 
 
 class Config:

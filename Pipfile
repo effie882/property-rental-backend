@@ -10,13 +10,12 @@ flask-migrate = "*"
 flask-cors = "*"
 python-dotenv = "*"
 flask-jwt-extended = "*"
-marshmallow = "*"
-flask-bcrypt = "*"
-flask-restful = "*"
 flask-marshmallow = "*"
-marshmallow-sqlalchemy = "*"
-alembic = "*"
+flask-restful = "*"
 gunicorn = "*"
+flask-bcrypt = "*"
+marshmallow = "==3.26.1"
+marshmallow-sqlalchemy = "*"
 
 [dev-packages]
 

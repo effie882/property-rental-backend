@@ -1,4 +1,4 @@
-from extensions import db
+from extensions import db, ma
 
 property_amenities = db.Table(
     "property_amenities",

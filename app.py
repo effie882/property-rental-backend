@@ -5,7 +5,7 @@ from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
 
 from config import Config
-from extensions import db, migrate, cors, jwt, bcrypt
+from extensions import db, migrate, cors, jwt, bcrypt, ma
 
 
 def create_app():
@@ -17,6 +17,7 @@ def create_app():
     cors.init_app(app)
     jwt.init_app(app)
     bcrypt.init_app(app)
+    ma.init_app(app)
 
     from resources.Auth import auth_bp
     from resources.User import user_bp
